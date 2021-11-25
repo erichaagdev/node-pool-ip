@@ -1,0 +1,45 @@
+name: Build
+
+on:
+  push:
+    branches: [ 'main' ]
+    tags: [ 'v*.*.*' ]
+  pull_request:
+
+env:
+  IMAGE_NAME: nodepool-ip-controller
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v2
+
+      - name: Docker login
+        if: ${{ github.event_name == 'push' }}
+        uses: docker/login-action@v1
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build container
+        if: ${{ github.event_name == 'push' }}
+        run: |
+          # Strip git ref prefix from version
+          VERSION=$(echo "${{ github.ref }}" | sed -e 's,.*/\(.*\),\1,')
+          # Strip "v" prefix from tag name
+          [[ "${{ github.ref }}" == "refs/tags/"* ]] && VERSION=$(echo $VERSION | sed -e 's/^v//')
+          # Use Docker `latest` tag convention
+          [ "$VERSION" == "main" ] && VERSION=latest
+          # Change all uppercase to lowercase
+          IMAGE_ID=$(echo "ghcr.io/${{ github.repository_owner }}/$IMAGE_NAME:$VERSION" | tr '[A-Z]' '[a-z]')
+          docker build . --file Dockerfile --tag $IMAGE_ID
+          docker push $IMAGE_ID
