@@ -1,0 +1,75 @@
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  labels:
+    app: node-pool-ip-controller
+  name: node-pool-ip-controller
+  namespace: node-pool-ip-controller
+spec:
+  schedule: "*/1 * * * *"
+  jobTemplate:
+    spec:
+      template:
+        spec:
+          containers:
+            - name: nodepool-ip-controller
+              image: ghcr.io/erichaagdev/nodepool-ip-controller:latest
+              imagePullPolicy: IfNotPresent
+              volumeMounts:
+                - name: google-cloud-key
+                  mountPath: /var/secrets/google
+              env:
+                - name: GOOGLE_APPLICATION_CREDENTIALS
+                  value: /var/secrets/google/key.json
+                - name: GOOGLE_CLOUD_PROJECT
+                  valueFrom:
+                    configMapKeyRef:
+                      name: node-pool-ip-controller-config
+                      key: GOOGLE_CLOUD_PROJECT
+                - name: GOOGLE_CLOUD_ZONE
+                  valueFrom:
+                    configMapKeyRef:
+                      name: node-pool-ip-controller-config
+                      key: GOOGLE_CLOUD_ZONE
+                - name: GOOGLE_CLOUD_REGION
+                  valueFrom:
+                    configMapKeyRef:
+                      name: node-pool-ip-controller-config
+                      key: GOOGLE_CLOUD_REGION
+                - name: GOOGLE_CLOUD_CONTAINER_CLUSTER
+                  valueFrom:
+                    configMapKeyRef:
+                      name: node-pool-ip-controller-config
+                      key: GOOGLE_CLOUD_CONTAINER_CLUSTER
+                - name: GOOGLE_CLOUD_CONTAINER_NODE_POOL
+                  valueFrom:
+                    configMapKeyRef:
+                      name: node-pool-ip-controller-config
+                      key: GOOGLE_CLOUD_CONTAINER_NODE_POOL
+                - name: GOOGLE_CLOUD_COMPUTE_ADDRESS
+                  valueFrom:
+                    configMapKeyRef:
+                      name: node-pool-ip-controller-config
+                      key: GOOGLE_CLOUD_COMPUTE_ADDRESS
+          restartPolicy: OnFailure
+          volumes:
+            - name: google-cloud-key
+              secret:
+                secretName: node-pool-ip-controller-service-account-credentials
+
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  labels:
+    app: node-pool-ip-controller
+  name: node-pool-ip-controller-config
+  namespace: node-pool-ip-controller
+data:
+  GOOGLE_APPLICATION_CREDENTIALS: /var/secrets/google/key.json
+  GOOGLE_CLOUD_PROJECT: gorlah
+  GOOGLE_CLOUD_ZONE: us-central1-c
+  GOOGLE_CLOUD_REGION: us-central1
+  GOOGLE_CLOUD_CONTAINER_CLUSTER: coruscant-cluster
+  GOOGLE_CLOUD_CONTAINER_NODE_POOL: coruscant-primary-node-pool
+  GOOGLE_CLOUD_COMPUTE_ADDRESS: coruscant-ip
