@@ -7,7 +7,7 @@ on:
   pull_request:
 
 env:
-  IMAGE_NAME: nodepool-ip-controller
+  IMAGE_NAME: node-pool-ip-controller
 
 defaults:
   run:

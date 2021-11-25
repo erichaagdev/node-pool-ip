@@ -13,7 +13,7 @@ spec:
         spec:
           containers:
             - name: nodepool-ip-controller
-              image: ghcr.io/erichaagdev/nodepool-ip-controller:latest
+              image: ghcr.io/erichaagdev/node-pool-ip-controller:latest
               imagePullPolicy: IfNotPresent
               volumeMounts:
                 - name: google-cloud-key
