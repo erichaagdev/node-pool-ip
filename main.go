@@ -10,6 +10,7 @@ import (
 	containerpb "google.golang.org/genproto/googleapis/container/v1"
 	"os"
 	"strings"
+	"time"
 )
 
 func getenv(key string) *string {
@@ -121,14 +122,18 @@ func (client GoogleCloudSdkClient) deleteAccessConfigByName(instanceName string,
 	if err != nil {
 		return err
 	}
-	opReq := &computepb.WaitZoneOperationRequest{Operation: op.Proto().GetName(), Project: *client.project, Zone: *client.zone}
-	opResp, err := client.zoneOperations.Wait(context.Background(), opReq)
-	if err != nil {
-		return err
+	status := op.Proto().GetStatus()
+	for status != computepb.Operation_DONE {
+		fmt.Printf("Current status is %v, sleeping for 2 seconds...\n", status)
+		time.Sleep(2 * time.Second)
+		opReq := &computepb.GetZoneOperationRequest{Operation: op.Proto().GetName(), Project: *client.project, Zone: *client.zone}
+		opResp, err := client.zoneOperations.Get(context.Background(), opReq)
+		if err != nil {
+			return err
+		}
+		status = opResp.GetStatus()
 	}
-	if opResp.GetStatus() != computepb.Operation_DONE {
-		return fmt.Errorf("deleting access config failed with status %v", opResp.GetStatus().String())
-	}
+	fmt.Println("Deleting access config successful...")
 	return nil
 }
 
@@ -146,14 +151,18 @@ func (client GoogleCloudSdkClient) addAccessConfig(instanceName string, networkN
 	if err != nil {
 		return err
 	}
-	opReq := &computepb.WaitZoneOperationRequest{Operation: op.Proto().GetName(), Project: *client.project, Zone: *client.zone}
-	opResp, err := client.zoneOperations.Wait(context.Background(), opReq)
-	if err != nil {
-		return err
+	status := op.Proto().GetStatus()
+	for status != computepb.Operation_DONE {
+		fmt.Printf("Current status is %v, sleeping for 2 seconds...\n", status)
+		time.Sleep(2 * time.Second)
+		opReq := &computepb.GetZoneOperationRequest{Operation: op.Proto().GetName(), Project: *client.project, Zone: *client.zone}
+		opResp, err := client.zoneOperations.Get(context.Background(), opReq)
+		if err != nil {
+			return err
+		}
+		status = opResp.GetStatus()
 	}
-	if opResp.GetStatus() != computepb.Operation_DONE {
-		return fmt.Errorf("adding access config failed with status %v", opResp.GetStatus().String())
-	}
+	fmt.Println("Adding access config successful...")
 	return nil
 }
 

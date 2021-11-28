@@ -18,11 +18,17 @@ spec:
           containers:
             - name: nodepool-ip-controller
               image: ghcr.io/erichaagdev/node-pool-ip-controller:latest
-              imagePullPolicy: IfNotPresent
+              imagePullPolicy: Always
               volumeMounts:
                 - name: google-cloud-key
                   mountPath: /var/secrets/google
               env:
+                - name: GRPC_GO_LOG_SEVERITY_LEVEL
+                  value: info
+                - name: GRPC_GO_LOG_VERBOSITY_LEVEL
+                  value: '99'
+                - name: GODEBUG
+                  value: http2debug=1
                 - name: GOOGLE_APPLICATION_CREDENTIALS
                   value: /var/secrets/google/key.json
                 - name: GOOGLE_CLOUD_PROJECT
