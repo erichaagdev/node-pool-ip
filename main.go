@@ -227,7 +227,7 @@ func main() {
 	err = run(client, *cluster, *nodePool, *address)
 	if err != nil {
 		fmt.Println(err)
-		return
+		os.Exit(1)
 	}
 }
 
@@ -275,6 +275,7 @@ func run(client GoogleCloudClient, cluster string, nodePool string, address stri
 
 	if !isIpAssigned {
 		instance := instances[0]
+		fmt.Println("%v is not assigned. assigning to %v", *ip, *instance)
 		accessConfigs := networkMap[*instance]
 		externalNats := filter(accessConfigs, func(accessConfig *AccessConfig) bool {
 			return accessConfig.name == "external-nat" || accessConfig.name == "External NAT"
