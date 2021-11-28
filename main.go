@@ -165,7 +165,6 @@ func (client GoogleCloudSdkClient) close() {
 }
 
 func main() {
-
 	project := getenv("GOOGLE_CLOUD_PROJECT")
 	region := getenv("GOOGLE_CLOUD_REGION")
 	zone := getenv("GOOGLE_CLOUD_ZONE")
@@ -226,22 +225,25 @@ func main() {
 
 	err = run(client, *cluster, *nodePool, *address)
 	if err != nil {
-		fmt.Println(err)
+		fmt.Println("**ERROR**", err)
 		os.Exit(1)
 	}
 }
 
 func run(client GoogleCloudClient, cluster string, nodePool string, address string) error {
+	fmt.Printf("Running IP check: cluster=%v, nodePool=%v, address=%v\n", cluster, nodePool, address)
 
 	ip, err := client.getAddressByName(address)
 	if err != nil {
 		return err
 	}
+	fmt.Printf("Found IP: %v\n", *ip)
 
 	instanceGroup, err := client.getInstanceGroupByNodePoolName(cluster, nodePool)
 	if err != nil {
 		return err
 	}
+	fmt.Printf("Found instance group: %v\n", *instanceGroup)
 
 	instances, err := client.getInstancesByInstanceGroupName(*instanceGroup)
 	if err != nil {
@@ -251,6 +253,7 @@ func run(client GoogleCloudClient, cluster string, nodePool string, address stri
 	networkMap := make(map[string][]*AccessConfig)
 
 	for _, instance := range instances {
+		fmt.Printf("Found instance: %v\n", *instance)
 		accessConfig, err := client.getAccessConfigsByInstanceName(*instance)
 		if err != nil {
 			return err
@@ -275,22 +278,25 @@ func run(client GoogleCloudClient, cluster string, nodePool string, address stri
 
 	if !isIpAssigned {
 		instance := instances[0]
-		fmt.Println("%v is not assigned. assigning to %v", *ip, *instance)
 		accessConfigs := networkMap[*instance]
 		externalNats := filter(accessConfigs, func(accessConfig *AccessConfig) bool {
 			return accessConfig.name == "external-nat" || accessConfig.name == "External NAT"
 		})
 		for _, accessConfig := range externalNats {
+			fmt.Printf("Removing existing access configs from %v\n", *instance)
 			err := client.deleteAccessConfigByName(*instance, accessConfig.network, accessConfig.name)
 			if err != nil {
 				return err
 			}
-			err = client.addAccessConfig(*instance, accessConfig.network, *ip)
-			if err != nil {
-				return err
-			}
-			return nil
 		}
+		fmt.Printf("Assigning IP to %v\n", *instance)
+		err = client.addAccessConfig(*instance, "nic0", *ip)
+		if err != nil {
+			return err
+		}
+		return nil
+	} else {
+		fmt.Println("IP is already assigned.")
 	}
 
 	return nil
