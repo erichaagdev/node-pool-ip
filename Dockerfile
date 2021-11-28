@@ -4,6 +4,6 @@ WORKDIR /go/src/project/
 RUN go build -ldflags "-w -s" -o /bin/project
 
 FROM alpine:3.14.3
-COPY --from=build /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/ca-certificates.crt
+RUN apk add --update-cache --no-cache ca-certificates
 COPY --from=build /bin/project /bin/project
 ENTRYPOINT ["/bin/project"]

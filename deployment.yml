@@ -7,9 +7,13 @@ metadata:
   namespace: node-pool-ip-controller
 spec:
   schedule: "*/1 * * * *"
+  concurrencyPolicy: Forbid
   jobTemplate:
     spec:
       template:
+        metadata:
+          labels:
+            app: node-pool-ip-controller
         spec:
           containers:
             - name: nodepool-ip-controller

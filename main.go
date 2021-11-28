@@ -162,6 +162,7 @@ func (client GoogleCloudSdkClient) close() {
 	_ = client.clusterManager.Close()
 	_ = client.instanceGroups.Close()
 	_ = client.instances.Close()
+	_ = client.zoneOperations.Close()
 }
 
 func main() {
