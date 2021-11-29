@@ -181,7 +181,7 @@ func (client GoogleCloudSdkClient) setNodePoolIP(cluster string, nodePool string
 	if err != nil {
 		return nil, err
 	}
-	resp, err := client.cloudRunClient.Post(*client.cloudRunUrl, "application/json", bytes.NewBuffer(reqJson))
+	resp, err := client.cloudRunClient.Post(*client.cloudRunUrl+"/run", "application/json", bytes.NewBuffer(reqJson))
 	if err != nil {
 		return nil, err
 	}
