@@ -32,13 +32,13 @@ jobs:
       - name: Docker tag
         uses: docker/metadata-action@v3
         with:
-          images: ${{ github.repository_owner }}/${{ $IMAGE_NAME }}
+          images: ${{ github.repository_owner }}/$IMAGE_NAME
 
       - name: Docker login
         if: ${{ github.event_name == 'push' }}
         uses: docker/login-action@v1
         with:
-          registry: ${{ $DEPLOY_REGION }}-docker.pkg.dev
+          registry: $DEPLOY_REGION-docker.pkg.dev
           username: _json_key
           password: ${{ secrets.GOOGLE_CREDENTIALS }}
 #
