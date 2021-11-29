@@ -3,11 +3,18 @@ name: Build
 on:
   push:
     branches: [ 'main' ]
-    tags: [ 'v*.*.*' ]
-  pull_request:
+    tags: [ 'v*' ]
+#  pull_request:
+#    branches: [ 'main' ]
 
 env:
-  IMAGE_NAME: node-pool-ip-controller
+  IMAGE_NAME: erichaag.dev
+  GOOGLE_PROJECT: gorlah
+  GOOGLE_REPO: docker
+  DEPLOY_REGION: us-central1
+  DEPLOY_ZONE: us-central1-c
+#  DEPLOY_CLUSTER: coruscant-cluster
+#  DEPLOY_YML: deployment.yml
 
 defaults:
   run:
@@ -22,24 +29,54 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v2
 
+      - name: Docker tag
+        uses: docker/metadata-action@v3
+        with:
+          images: ${{ github.repository_owner }}/${{ $IMAGE_NAME }}
+
       - name: Docker login
         if: ${{ github.event_name == 'push' }}
         uses: docker/login-action@v1
         with:
-          registry: ghcr.io
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Build container
-        if: ${{ github.event_name == 'push' }}
-        run: |
-          # Strip git ref prefix from version
-          VERSION=$(echo "${{ github.ref }}" | sed -e 's,.*/\(.*\),\1,')
-          # Strip "v" prefix from tag name
-          [[ "${{ github.ref }}" == "refs/tags/"* ]] && VERSION=$(echo $VERSION | sed -e 's/^v//')
-          # Use Docker `latest` tag convention
-          [ "$VERSION" == "main" ] && VERSION=latest
-          # Change all uppercase to lowercase
-          IMAGE_ID=$(echo "ghcr.io/${{ github.repository_owner }}/$IMAGE_NAME:$VERSION" | tr '[A-Z]' '[a-z]')
-          docker build . --file Dockerfile --tag $IMAGE_ID
-          docker push $IMAGE_ID
+          registry: ${{ $DEPLOY_REGION }}-docker.pkg.dev
+          username: _json_key
+          password: ${{ secrets.GOOGLE_CREDENTIALS }}
+#
+#      - name: Build container
+#        if: ${{ github.event_name == 'push' }}
+#        run: |
+#          # Strip git ref prefix from version
+#          VERSION=$(echo "${{ github.ref }}" | sed -e 's,.*/\(.*\),\1,')
+#
+#          # Strip "v" prefix from tag name
+#          [[ "${{ github.ref }}" == "refs/tags/"* ]] && VERSION=$(echo $VERSION | sed -e 's/^v//')
+#
+#          # Use Docker `latest` tag convention
+#          [ "$VERSION" == "main" ] && VERSION=latest
+#
+#          # Change all uppercase to lowercase
+#          IMAGE_ID=$(echo "ghcr.io/${{ github.repository_owner }}/$IMAGE_NAME:$VERSION" | tr '[A-Z]' '[a-z]')
+#
+#          docker build . --file Dockerfile --tag $IMAGE_ID
+#          docker push $IMAGE_ID
+#
+#  deploy:
+#    if: github.event_name == 'push'
+#    needs: build
+#    runs-on: ubuntu-latest
+#    environment: production
+#    env:
+#      GOOGLE_CREDENTIALS: ${{ secrets.GOOGLE_CREDENTIALS }}
+#
+#    steps:
+#      - name: Checkout
+#        uses: actions/checkout@v2
+#
+#      - name: Google Login
+#        run: >
+#          echo "$GOOGLE_CREDENTIALS" | gcloud auth activate-service-account --key-file -
+#          && gcloud config set project $(echo "$GOOGLE_CREDENTIALS" | jq -r '.project_id')
+#          && gcloud container clusters get-credentials $DEPLOY_CLUSTER --zone=$DEPLOY_ZONE
+#
+#      - name: Deploy
+#        run: kubectl apply -f $DEPLOY_YML && kubectl rollout restart -f $DEPLOY_YML 2> /dev/null || true
