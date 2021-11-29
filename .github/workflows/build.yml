@@ -30,6 +30,7 @@ jobs:
         uses: actions/checkout@v2
 
       - name: Docker tag
+        id: meta
         uses: docker/metadata-action@v3
         with:
           images: ${{ github.repository_owner }}/${{ env.IMAGE_NAME }}
