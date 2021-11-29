@@ -33,7 +33,7 @@ jobs:
         id: meta
         uses: docker/metadata-action@v3
         with:
-          images: ${{ github.repository_owner }}/${{ env.IMAGE_NAME }}
+          images: ${{ env.DEPLOY_REGION }}-docker.pkg.dev/${{ env.GOOGLE_PROJECT }}/${{ env.GOOGLE_REPO }}/${{ env.IMAGE_NAME }}
           tags: |
             type=semver,pattern={{version}}
             type=raw,value=latest
@@ -48,7 +48,7 @@ jobs:
       - name: Docker build and push
         uses: docker/build-push-action@v2
         with:
-#           context: .
+          context: .
           push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
