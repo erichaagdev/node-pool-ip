@@ -33,7 +33,9 @@ jobs:
         uses: docker/metadata-action@v3
         with:
           images: ${{ github.repository_owner }}/${{ env.IMAGE_NAME }}
-          tags: type=semver,pattern={{version}}
+          tags: |
+            type=semver,pattern={{version}}
+            type=raw,value=latest
 
       - name: Docker login
         if: ${{ github.event_name == 'push' }}
