@@ -1,32 +1,23 @@
 package main
 
 import (
+	"bytes"
 	compute "cloud.google.com/go/compute/apiv1"
 	container "cloud.google.com/go/container/apiv1"
 	"context"
+	"encoding/json"
 	"fmt"
+	"google.golang.org/api/idtoken"
 	"google.golang.org/api/iterator"
 	computepb "google.golang.org/genproto/googleapis/cloud/compute/v1"
 	containerpb "google.golang.org/genproto/googleapis/container/v1"
+	"io/ioutil"
+	"log"
+	"net/http"
 	"os"
 	"strings"
 	"time"
 )
-
-func getenv(key string) *string {
-	value, set := os.LookupEnv(key)
-	if !set || len(value) == 0 {
-		fmt.Printf("environment variable '%v' is not set\n", key)
-		return nil
-	}
-	return &value
-}
-
-func basename(url string) *string {
-	components := strings.Split(url, "/")
-	part := components[len(components)-1]
-	return &part
-}
 
 type GoogleCloudClient interface {
 	addAccessConfig(string, string, string) error
@@ -35,12 +26,12 @@ type GoogleCloudClient interface {
 	getAddressByName(string) (*string, error)
 	getInstanceGroupByNodePoolName(string, string) (*string, error)
 	getInstancesByInstanceGroupName(string) ([]*string, error)
+	setNodePoolIP(string, string, string) (*string, error)
 }
 
 type AccessConfig struct {
-	network string
-	name    string
-	natIP   string
+	name  string
+	natIP string
 }
 
 type GoogleCloudSdkClient struct {
@@ -53,6 +44,9 @@ type GoogleCloudSdkClient struct {
 	zoneOperations *compute.ZoneOperationsClient
 	instanceGroups *compute.InstanceGroupsClient
 	instances      *compute.InstancesClient
+
+	cloudRunClient *http.Client
+	cloudRunUrl    *string
 }
 
 func (client GoogleCloudSdkClient) getAddressByName(name string) (*string, error) {
@@ -102,9 +96,8 @@ func (client GoogleCloudSdkClient) getAccessConfigsByInstanceName(name string) (
 	accessConfigs := make([]*AccessConfig, 0)
 	for _, accessConfig := range networkInterface.GetAccessConfigs() {
 		accessConfigs = append(accessConfigs, &AccessConfig{
-			network: networkInterface.GetName(),
-			name:    accessConfig.GetName(),
-			natIP:   accessConfig.GetNatIP(),
+			name:  accessConfig.GetName(),
+			natIP: accessConfig.GetNatIP(),
 		})
 	}
 	return accessConfigs, err
@@ -124,7 +117,7 @@ func (client GoogleCloudSdkClient) deleteAccessConfigByName(instanceName string,
 	}
 	status := op.Proto().GetStatus()
 	for status != computepb.Operation_DONE {
-		fmt.Printf("Current status is %v, sleeping for 2 seconds...\n", status)
+		log.Printf("Current status is %v, sleeping for 2 seconds...\n", status)
 		time.Sleep(2 * time.Second)
 		opReq := &computepb.GetZoneOperationRequest{Operation: op.Proto().GetName(), Project: *client.project, Zone: *client.zone}
 		opResp, err := client.zoneOperations.Get(context.Background(), opReq)
@@ -133,7 +126,7 @@ func (client GoogleCloudSdkClient) deleteAccessConfigByName(instanceName string,
 		}
 		status = opResp.GetStatus()
 	}
-	fmt.Println("Deleting access config successful...")
+	log.Print("Deleting access config successful...")
 	return nil
 }
 
@@ -153,7 +146,7 @@ func (client GoogleCloudSdkClient) addAccessConfig(instanceName string, networkN
 	}
 	status := op.Proto().GetStatus()
 	for status != computepb.Operation_DONE {
-		fmt.Printf("Current status is %v, sleeping for 2 seconds...\n", status)
+		log.Printf("Current status is %v, sleeping for 2 seconds...\n", status)
 		time.Sleep(2 * time.Second)
 		opReq := &computepb.GetZoneOperationRequest{Operation: op.Proto().GetName(), Project: *client.project, Zone: *client.zone}
 		opResp, err := client.zoneOperations.Get(context.Background(), opReq)
@@ -162,8 +155,43 @@ func (client GoogleCloudSdkClient) addAccessConfig(instanceName string, networkN
 		}
 		status = opResp.GetStatus()
 	}
-	fmt.Println("Adding access config successful...")
+	log.Print("Adding access config successful...")
 	return nil
+}
+
+type NodePoolIpRequest struct {
+	Project    string `json:"project"`
+	Region     string `json:"region"`
+	Zone       string `json:"zone"`
+	Cluster    string `json:"cluster"`
+	NodePool   string `json:"node_pool"`
+	ExternalIP string `json:"external_ip"`
+}
+
+func (client GoogleCloudSdkClient) setNodePoolIP(cluster string, nodePool string, externalIP string) (*string, error) {
+	req := NodePoolIpRequest{
+		Project:    *client.project,
+		Region:     *client.region,
+		Zone:       *client.zone,
+		Cluster:    cluster,
+		NodePool:   nodePool,
+		ExternalIP: externalIP,
+	}
+	reqJson, err := json.Marshal(req)
+	if err != nil {
+		return nil, err
+	}
+	resp, err := client.cloudRunClient.Post(*client.cloudRunUrl, "application/json", bytes.NewBuffer(reqJson))
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+	respBody, err := ioutil.ReadAll(resp.Body)
+	if err != nil {
+		return nil, err
+	}
+	respBodyString := string(respBody)
+	return &respBodyString, nil
 }
 
 func (client GoogleCloudSdkClient) close() {
@@ -174,89 +202,113 @@ func (client GoogleCloudSdkClient) close() {
 	_ = client.zoneOperations.Close()
 }
 
+func getenv(key string) *string {
+	value, set := os.LookupEnv(key)
+	if !set || len(value) == 0 {
+		log.Printf("environment variable '%v' is not set\n", key)
+		return nil
+	}
+	return &value
+}
+
+func basename(url string) *string {
+	components := strings.Split(url, "/")
+	part := components[len(components)-1]
+	return &part
+}
+
 func main() {
+	cloudRunUrl := getenv("CLOUD_RUN_URL")
+	project := getenv("GOOGLE_CLOUD_PROJECT")
+	region := getenv("GOOGLE_CLOUD_REGION")
+	zone := getenv("GOOGLE_CLOUD_ZONE")
+	cluster := getenv("GOOGLE_CLOUD_CONTAINER_CLUSTER")
+	nodePool := getenv("GOOGLE_CLOUD_CONTAINER_NODE_POOL")
+	address := getenv("GOOGLE_CLOUD_COMPUTE_ADDRESS")
 
-	fmt.Printf("hello from node-pool-ip-controller!")
+	if cloudRunUrl == nil || project == nil || region == nil || zone == nil || cluster == nil || nodePool == nil || address == nil {
+		log.Print("exiting...")
+		return
+	}
 
-	//project := getenv("GOOGLE_CLOUD_PROJECT")
-	//region := getenv("GOOGLE_CLOUD_REGION")
-	//zone := getenv("GOOGLE_CLOUD_ZONE")
-	//cluster := getenv("GOOGLE_CLOUD_CONTAINER_CLUSTER")
-	//nodePool := getenv("GOOGLE_CLOUD_CONTAINER_NODE_POOL")
-	//address := getenv("GOOGLE_CLOUD_COMPUTE_ADDRESS")
-	//
-	//if project == nil || region == nil || zone == nil || cluster == nil || nodePool == nil || address == nil {
-	//	fmt.Println("exiting...")
-	//	return
-	//}
-	//
-	//ctx := context.Background()
-	//
-	//addresses, err := compute.NewAddressesRESTClient(ctx)
-	//if err != nil {
-	//	fmt.Println(err)
-	//	return
-	//}
-	//
-	//clusterManager, err := container.NewClusterManagerClient(ctx)
-	//if err != nil {
-	//	fmt.Println(err)
-	//	return
-	//}
-	//
-	//zoneOperations, err := compute.NewZoneOperationsRESTClient(ctx)
-	//if err != nil {
-	//	fmt.Println(err)
-	//	return
-	//}
-	//
-	//instanceGroups, err := compute.NewInstanceGroupsRESTClient(ctx)
-	//if err != nil {
-	//	fmt.Println(err)
-	//	return
-	//}
-	//
-	//instances, err := compute.NewInstancesRESTClient(ctx)
-	//if err != nil {
-	//	fmt.Println(err)
-	//	return
-	//}
-	//
-	//client := GoogleCloudSdkClient{
-	//	project: project,
-	//	region:  region,
-	//	zone:    zone,
-	//
-	//	addresses:      addresses,
-	//	clusterManager: clusterManager,
-	//	zoneOperations: zoneOperations,
-	//	instanceGroups: instanceGroups,
-	//	instances:      instances,
-	//}
-	//
-	//defer client.close()
-	//
-	//err = run(client, *cluster, *nodePool, *address)
-	//if err != nil {
-	//	fmt.Println("**ERROR**", err)
-	//	os.Exit(1)
-	//}
+	ctx := context.Background()
+
+	addresses, err := compute.NewAddressesRESTClient(ctx)
+	if err != nil {
+		log.Print(err)
+		return
+	}
+
+	clusterManager, err := container.NewClusterManagerClient(ctx)
+	if err != nil {
+		log.Print(err)
+		return
+	}
+
+	zoneOperations, err := compute.NewZoneOperationsRESTClient(ctx)
+	if err != nil {
+		log.Print(err)
+		return
+	}
+
+	instanceGroups, err := compute.NewInstanceGroupsRESTClient(ctx)
+	if err != nil {
+		log.Print(err)
+		return
+	}
+
+	instances, err := compute.NewInstancesRESTClient(ctx)
+	if err != nil {
+		log.Print(err)
+		return
+	}
+
+	cloudRunClient, err := idtoken.NewClient(ctx, *cloudRunUrl)
+	if err != nil {
+		log.Print(err)
+		return
+	}
+
+	client := GoogleCloudSdkClient{
+		project: project,
+		region:  region,
+		zone:    zone,
+
+		addresses:      addresses,
+		clusterManager: clusterManager,
+		zoneOperations: zoneOperations,
+		instanceGroups: instanceGroups,
+		instances:      instances,
+
+		cloudRunUrl:    cloudRunUrl,
+		cloudRunClient: cloudRunClient,
+	}
+
+	defer client.close()
+
+	for {
+		err = run(client, *cluster, *nodePool, *address)
+		if err != nil {
+			log.Print("**ERROR**", err)
+		}
+		time.Sleep(60 * time.Second)
+	}
 }
 
 func run(client GoogleCloudClient, cluster string, nodePool string, address string) error {
-	fmt.Printf("Running IP check: cluster=%v, nodePool=%v, address=%v\n", cluster, nodePool, address)
+	log.Printf("Running IP check: cluster=%v, nodePool=%v, address=%v\n", cluster, nodePool, address)
 
 	ip, err := client.getAddressByName(address)
 	if err != nil {
 		return err
 	}
-	fmt.Printf("Found IP: %v\n", *ip)
+	log.Printf("Found IP: %v\n", *ip)
 
 	instanceGroup, err := client.getInstanceGroupByNodePoolName(cluster, nodePool)
 	if err != nil {
 		return err
 	}
-	fmt.Printf("Found instance group: %v\n", *instanceGroup)
+	log.Printf("Found instance group: %v\n", *instanceGroup)
 
 	instances, err := client.getInstancesByInstanceGroupName(*instanceGroup)
 	if err != nil {
@@ -266,7 +318,7 @@ func run(client GoogleCloudClient, cluster string, nodePool string, address stri
 	networkMap := make(map[string][]*AccessConfig)
 
 	for _, instance := range instances {
-		fmt.Printf("Found instance: %v\n", *instance)
+		log.Printf("Found instance: %v\n", *instance)
 		accessConfig, err := client.getAccessConfigsByInstanceName(*instance)
 		if err != nil {
 			return err
@@ -290,37 +342,15 @@ func run(client GoogleCloudClient, cluster string, nodePool string, address stri
 	}
 
 	if !isIpAssigned {
-		instance := instances[0]
-		accessConfigs := networkMap[*instance]
-		externalNats := filter(accessConfigs, func(accessConfig *AccessConfig) bool {
-			return accessConfig.name == "external-nat" || accessConfig.name == "External NAT"
-		})
-		for _, accessConfig := range externalNats {
-			fmt.Printf("Removing existing access configs from %v\n", *instance)
-			err := client.deleteAccessConfigByName(*instance, accessConfig.network, accessConfig.name)
-			if err != nil {
-				return err
-			}
-		}
-		fmt.Printf("Assigning IP to %v\n", *instance)
-		err = client.addAccessConfig(*instance, "nic0", *ip)
+		log.Print("calling node-pool-ip-func")
+		resp, err := client.setNodePoolIP(cluster, nodePool, address)
 		if err != nil {
 			return err
 		}
-		return nil
+		log.Print(*resp)
 	} else {
-		fmt.Println("IP is already assigned.")
+		log.Print("IP is already assigned.")
 	}
 
 	return nil
-}
-
-func filter(accessConfigs []*AccessConfig, test func(accessConfig *AccessConfig) bool) []*AccessConfig {
-	filtered := make([]*AccessConfig, 0)
-	for _, e := range accessConfigs {
-		if test(e) {
-			filtered = append(filtered, e)
-		}
-	}
-	return filtered
 }

@@ -5,6 +5,7 @@ go 1.17
 require (
 	cloud.google.com/go v0.97.0
 	cloud.google.com/go/container v1.0.0
+	github.com/google/uuid v1.1.2
 	google.golang.org/api v0.60.0
 	google.golang.org/genproto v0.0.0-20211118181313-81c1377c94b1
 )
