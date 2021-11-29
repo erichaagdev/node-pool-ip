@@ -1,0 +1,50 @@
+name: Build func
+
+on:
+  push:
+    branches: [ 'main' ]
+    tags: [ 'v*' ]
+  pull_request:
+    branches: [ 'main' ]
+
+env:
+  IMAGE_NAME: us-central1-docker.pkg.dev/gorlah/docker/node-pool-ip-func
+  GOOGLE_REGION: us-central1
+  DOCKERFILE: ./node-pool-ip-func/Dockerfile
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v2
+
+      - name: Docker login
+        uses: docker/login-action@v1
+        with:
+          registry: ${{ env.GOOGLE_REGION }}-docker.pkg.dev
+          username: _json_key
+          password: ${{ secrets.GOOGLE_CREDENTIALS }}
+
+      - name: Docker tag
+        id: meta
+        uses: docker/metadata-action@v3
+        with:
+          images: ${{ env.IMAGE_NAME }}
+          tags: |
+            type=semver,pattern={{version}}
+            type=raw,value=latest
+
+      - name: Docker build and push
+        uses: docker/build-push-action@v2
+        with:
+          file: ${{ env.DOCKERFILE }}
+          push: ${{ github.event_name == 'push' }}
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}

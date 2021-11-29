@@ -1,5 +1,5 @@
 FROM golang:1.17.3-alpine3.14 AS build
-COPY go.mod go.sum main.go /go/src/project/
+COPY go.mod go.sum ./node-pool-ip-func/main.go /go/src/project/
 WORKDIR /go/src/project/
 RUN go build -ldflags "-w -s" -o /bin/project
 

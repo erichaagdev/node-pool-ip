@@ -1,7 +1,6 @@
 .idea
 
 # Binaries for programs and plugins
-node-pool-ip-controller
 *.exe
 *.exe~
 *.dll

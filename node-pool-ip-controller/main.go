@@ -175,69 +175,72 @@ func (client GoogleCloudSdkClient) close() {
 }
 
 func main() {
-	project := getenv("GOOGLE_CLOUD_PROJECT")
-	region := getenv("GOOGLE_CLOUD_REGION")
-	zone := getenv("GOOGLE_CLOUD_ZONE")
-	cluster := getenv("GOOGLE_CLOUD_CONTAINER_CLUSTER")
-	nodePool := getenv("GOOGLE_CLOUD_CONTAINER_NODE_POOL")
-	address := getenv("GOOGLE_CLOUD_COMPUTE_ADDRESS")
 
-	if project == nil || region == nil || zone == nil || cluster == nil || nodePool == nil || address == nil {
-		fmt.Println("exiting...")
-		return
-	}
+	fmt.Printf("hello from node-pool-ip-controller!")
 
-	ctx := context.Background()
-
-	addresses, err := compute.NewAddressesRESTClient(ctx)
-	if err != nil {
-		fmt.Println(err)
-		return
-	}
-
-	clusterManager, err := container.NewClusterManagerClient(ctx)
-	if err != nil {
-		fmt.Println(err)
-		return
-	}
-
-	zoneOperations, err := compute.NewZoneOperationsRESTClient(ctx)
-	if err != nil {
-		fmt.Println(err)
-		return
-	}
-
-	instanceGroups, err := compute.NewInstanceGroupsRESTClient(ctx)
-	if err != nil {
-		fmt.Println(err)
-		return
-	}
-
-	instances, err := compute.NewInstancesRESTClient(ctx)
-	if err != nil {
-		fmt.Println(err)
-		return
-	}
-
-	client := GoogleCloudSdkClient{
-		project: project,
-		region:  region,
-		zone:    zone,
-
-		addresses:      addresses,
-		clusterManager: clusterManager,
-		zoneOperations: zoneOperations,
-		instanceGroups: instanceGroups,
-		instances:      instances,
-	}
-
-	defer client.close()
-
-	err = run(client, *cluster, *nodePool, *address)
-	if err != nil {
-		fmt.Println("**ERROR**", err)
-		os.Exit(1)
-	}
+	//project := getenv("GOOGLE_CLOUD_PROJECT")
+	//region := getenv("GOOGLE_CLOUD_REGION")
+	//zone := getenv("GOOGLE_CLOUD_ZONE")
+	//cluster := getenv("GOOGLE_CLOUD_CONTAINER_CLUSTER")
+	//nodePool := getenv("GOOGLE_CLOUD_CONTAINER_NODE_POOL")
+	//address := getenv("GOOGLE_CLOUD_COMPUTE_ADDRESS")
+	//
+	//if project == nil || region == nil || zone == nil || cluster == nil || nodePool == nil || address == nil {
+	//	fmt.Println("exiting...")
+	//	return
+	//}
+	//
+	//ctx := context.Background()
+	//
+	//addresses, err := compute.NewAddressesRESTClient(ctx)
+	//if err != nil {
+	//	fmt.Println(err)
+	//	return
+	//}
+	//
+	//clusterManager, err := container.NewClusterManagerClient(ctx)
+	//if err != nil {
+	//	fmt.Println(err)
+	//	return
+	//}
+	//
+	//zoneOperations, err := compute.NewZoneOperationsRESTClient(ctx)
+	//if err != nil {
+	//	fmt.Println(err)
+	//	return
+	//}
+	//
+	//instanceGroups, err := compute.NewInstanceGroupsRESTClient(ctx)
+	//if err != nil {
+	//	fmt.Println(err)
+	//	return
+	//}
+	//
+	//instances, err := compute.NewInstancesRESTClient(ctx)
+	//if err != nil {
+	//	fmt.Println(err)
+	//	return
+	//}
+	//
+	//client := GoogleCloudSdkClient{
+	//	project: project,
+	//	region:  region,
+	//	zone:    zone,
+	//
+	//	addresses:      addresses,
+	//	clusterManager: clusterManager,
+	//	zoneOperations: zoneOperations,
+	//	instanceGroups: instanceGroups,
+	//	instances:      instances,
+	//}
+	//
+	//defer client.close()
+	//
+	//err = run(client, *cluster, *nodePool, *address)
+	//if err != nil {
+	//	fmt.Println("**ERROR**", err)
+	//	os.Exit(1)
+	//}
 }
 
 func run(client GoogleCloudClient, cluster string, nodePool string, address string) error {
