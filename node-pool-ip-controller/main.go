@@ -160,9 +160,6 @@ func (client GoogleCloudSdkClient) addAccessConfig(instanceName string, networkN
 }
 
 type NodePoolIpRequest struct {
-	Project    string `json:"project"`
-	Region     string `json:"region"`
-	Zone       string `json:"zone"`
 	Cluster    string `json:"cluster"`
 	NodePool   string `json:"node_pool"`
 	ExternalIP string `json:"external_ip"`
@@ -170,9 +167,6 @@ type NodePoolIpRequest struct {
 
 func (client GoogleCloudSdkClient) setNodePoolIP(cluster string, nodePool string, externalIP string) (*string, error) {
 	req := NodePoolIpRequest{
-		Project:    *client.project,
-		Region:     *client.region,
-		Zone:       *client.zone,
 		Cluster:    cluster,
 		NodePool:   nodePool,
 		ExternalIP: externalIP,
@@ -185,7 +179,7 @@ func (client GoogleCloudSdkClient) setNodePoolIP(cluster string, nodePool string
 	if err != nil {
 		return nil, err
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	respBody, err := ioutil.ReadAll(resp.Body)
 	if err != nil {
 		return nil, err
